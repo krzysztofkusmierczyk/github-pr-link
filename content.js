@@ -27,16 +27,19 @@ async function addButton() {
     button.className = 'btn btn-sm';  // GitHub-like style
 
     button.onclick = () => {
-      const title = document.querySelector('.js-issue-title')?.innerText.trim();
-      const changes = document.querySelector('.diffstat')?.innerText.trim();
-      const url = window.location.href;
-
       // Get repo name from URL: https://github.com/{owner}/{repo}/pull/{number}
       const match = window.location.pathname.match(/^\/([^\/]+)\/([^\/]+)\/pull\/\d+/);
       const repoName = match ? `${match[1]}/${match[2]}` : null;
 
-      if (title && changes) {
-	const formatted = `[${repoName}: ${title}](${url}) — \`${changes}\``;
+      const prTitle = document.querySelector('.js-issue-title')?.innerText.trim();
+      const changes = document.querySelector('.diffstat')?.innerText.trim();
+      const url = window.location.href;
+
+      const filesTabCounter = document.getElementById('files_tab_counter');
+      const filesChanged = filesTabCounter ? filesTabCounter.innerText.trim() : null;
+
+      if (prTitle && changes) {
+	const formatted = `[${repoName}: ${prTitle}](${url}) — ${filesChanged} files - \`${changes}\``;
         navigator.clipboard.writeText(formatted);
       } else {
         alert('Could not extract PR data');
