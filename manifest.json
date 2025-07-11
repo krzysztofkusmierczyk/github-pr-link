@@ -5,6 +5,11 @@
   "description": "Copy formatted PR link to clipboard",
   "permissions": ["clipboardWrite", "activeTab", "scripting"],
   "host_permissions": ["https://github.com/*"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{E5F048FF-5B35-4314-A2B6-9314B8CDECDE}"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://github.com/*/pull/*"],
