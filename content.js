@@ -39,7 +39,7 @@ async function addButton() {
       const filesChanged = filesTabCounter ? filesTabCounter.innerText.trim() : null;
 
       if (prTitle && changes) {
-	const formatted = `[${repoName}: ${prTitle}](${url}) — ${filesChanged} files - \`${changes}\``;
+	const formatted = `[${repoName}: ${prTitle}](${url}) — ${filesChanged} files — \`${changes}\``;
         navigator.clipboard.writeText(formatted);
       } else {
         alert('Could not extract PR data');

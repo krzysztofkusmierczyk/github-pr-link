@@ -11,12 +11,12 @@ When clicked, it copies a markdown-formatted link containing:
 Example output:
 
 ```markdown
-[user/repo-name: PR Title](https://github.com/user/repo-name/pull/338) — 4 files - `+156 −108`
+[user/repo-name: PR Title](https://github.com/user/repo-name/pull/338) — 4 files — `+156 −108`
 ```
 
 Which renders as:
 
-[user/repo-name: PR Title](https://github.com/user/repo-name/pull/338) — 4 files - `+156 −108`
+[user/repo-name: PR Title](https://github.com/user/repo-name/pull/338) — 4 files — `+156 −108`
 
 ## Features
 
