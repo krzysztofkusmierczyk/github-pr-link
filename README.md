@@ -37,7 +37,7 @@ This extension does not collect, store, or transmit any user data.
 ## Installation
 
 - [Chrome Web Store (coming soon)]()
-- [Firefox Add-ons (coming soon)]()
+- [Firefox Add-ons](https://github.com/krzysztofkusmierczyk/github-pr-link)
 
 ## License
 
