@@ -20,23 +20,57 @@ function waitForSelector(selector, timeout = 5000) {
 
 // Find the copy branch name button and its container
 async function findContainer() {
-  // Find copy branch button by looking for IconButton with copy icon
-  const copyIcon = await waitForSelector('svg.octicon-copy', 2000).catch(() => null);
-  const copyButton = copyIcon?.closest('button[data-component="IconButton"]');
-
-  if (copyButton) {
-    const container = copyButton.closest('.d-flex.flex-items-center.overflow-hidden') ||
-                      copyButton.parentElement;
-    if (container && document.contains(container)) {
-      return { container, insertAfter: copyButton };
+  // Approach 1: Wait for copy icon, then find button and container
+  const copyIcon = await waitForSelector('svg.octicon-copy', 5000).catch(() => null);
+  if (copyIcon) {
+    const copyButton = copyIcon.closest('button[data-component="IconButton"]');
+    if (copyButton) {
+      // Walk up the DOM to find the flex container
+      let container = copyButton.parentElement;
+      while (container && container !== document.body) {
+        const classes = container.className || '';
+        if (typeof classes === 'string' && 
+            classes.includes('d-flex') && 
+            classes.includes('flex-items-center') && 
+            classes.includes('overflow-hidden')) {
+          if (document.contains(container)) {
+            return { container, insertAfter: copyButton };
+          }
+        }
+        container = container.parentElement;
+      }
+      
+      // Fallback: use parent if we found the button
+      if (copyButton.parentElement && document.contains(copyButton.parentElement)) {
+        return { container: copyButton.parentElement, insertAfter: copyButton };
+      }
     }
   }
-
-  // Fallback: find container directly
-  const container = await waitForSelector('.d-flex.flex-items-center.overflow-hidden', 2000)
-    .catch(() => document.querySelector('.gh-header-actions'));
   
-  if (container && document.contains(container)) {
+  // Approach 2: Find container by waiting for it directly
+  try {
+    const container = await waitForSelector('div.d-flex.flex-items-center.overflow-hidden', 3000);
+    if (container) {
+      const copyBtn = container.querySelector('button[data-component="IconButton"] svg.octicon-copy')?.closest('button');
+      if (copyBtn) {
+        return { container, insertAfter: copyBtn };
+      }
+      return { container, insertAfter: null };
+    }
+  } catch (e) {
+    // Continue to fallback
+  }
+
+  // Approach 3: Try immediate query (no wait)
+  const container = document.querySelector('div.d-flex.flex-items-center.overflow-hidden') ||
+                    document.querySelector('.gh-header-actions') ||
+                    document.querySelector('.gh-header');
+  
+  if (container) {
+    const copyBtn = container.querySelector('button[data-component="IconButton"] svg.octicon-copy')?.closest('button');
+    if (copyBtn) {
+      return { container, insertAfter: copyBtn };
+    }
     return { container, insertAfter: null };
   }
 
@@ -59,10 +93,15 @@ function createButton() {
   button.setAttribute('data-size', 'small');
   button.setAttribute('data-variant', 'invisible');
   button.setAttribute('data-no-visuals', 'true');
-  button.className = 'prc-Button-ButtonBase-9n-Xk prc-Button-IconButton-fyge7';
+  // Use inline styles instead of random class names
   button.style.marginLeft = '4px';
   button.style.display = 'inline-flex';
   button.style.alignItems = 'center';
+  button.style.background = 'none';
+  button.style.border = 'none';
+  button.style.padding = '4px';
+  button.style.cursor = 'pointer';
+  button.style.color = 'inherit';
   
   // Create SVG icon (copy icon similar to GitHub's)
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -93,57 +132,102 @@ function createButton() {
     const match = window.location.pathname.match(/^\/([^\/]+)\/([^\/]+)\/pull\/\d+/);
     const repoName = match ? `${match[1]}/${match[2]}` : null;
 
-    // Get PR title - try multiple selectors
-    const prTitleSelectors = [
-      'h1[data-testid="pr-title"]',
-      '.js-issue-title',
-      'h1.b1',
-      'h1.gh-header-title',
-      'h1[class*="Title"]',
-      'h1',
-    ];
-    
+    // Get PR title - use data-component attribute (stable) or fallback to class patterns
     let prTitle = null;
-    for (const selector of prTitleSelectors) {
-      const el = document.querySelector(selector);
-      if (el) {
-        prTitle = el.innerText?.trim() || el.textContent?.trim();
-        if (prTitle) break;
-      }
+    const titleEl = document.querySelector('h1[data-component="PH_Title"]') ||
+                    document.querySelector('h1[data-testid="pr-title"]') ||
+                    document.querySelector('.js-issue-title') ||
+                    document.querySelector('h1');
+    
+    if (titleEl) {
+      // Get text from the title span, or fallback to entire h1 text
+      const titleSpan = titleEl.querySelector('span[class*="Text"]') ||
+                       titleEl.querySelector('span.markdown-title');
+      prTitle = (titleSpan?.innerText || titleSpan?.textContent || titleEl.innerText || titleEl.textContent)?.trim();
+      
+      // Remove PR number if present (e.g., "Title #409" -> "Title")
+      prTitle = prTitle?.replace(/\s*#\d+\s*$/, '').trim();
     }
 
     // Get files changed count from tab counter
-    const filesCounterSelectors = [
-      '#files_tab_counter',
-      'a[href*="#files"] .Counter',
-      'button[data-testid*="files"] .Counter',
-      '[role="tab"] a[href*="#files"] .Counter',
-    ];
-    
+    // Use stable ID selector first, then fallback to class patterns
     let filesChanged = null;
-    for (const selector of filesCounterSelectors) {
-      const el = document.querySelector(selector);
-      if (el) {
-        filesChanged = el.innerText?.trim() || el.textContent?.trim();
-        if (filesChanged) break;
+    
+    const filesTab = document.querySelector('#prs-files-anchor-tab') ||
+                     document.querySelector('a[href*="/changes"]');
+    
+    if (filesTab) {
+      // Look for counter span with data-variant="secondary" (stable attribute)
+      const counter = filesTab.querySelector('span[data-variant="secondary"]') ||
+                     filesTab.querySelector('span[aria-hidden="true"][class*="Counter"]') ||
+                     filesTab.querySelector('span[aria-hidden="true"]');
+      
+      if (counter) {
+        filesChanged = counter.innerText?.trim() || counter.textContent?.trim();
+        // Extract just the number if there's extra text
+        const numMatch = filesChanged.match(/(\d+)/);
+        if (numMatch) {
+          filesChanged = numMatch[1];
+        }
+      }
+    }
+    
+    // Fallback: try legacy selector
+    if (!filesChanged) {
+      const legacyCounter = document.querySelector('#files_tab_counter');
+      if (legacyCounter) {
+        filesChanged = legacyCounter.innerText?.trim() || legacyCounter.textContent?.trim();
       }
     }
 
     // Get diffstat (lines added/removed)
-    const diffstatSelectors = [
-      '.diffstat',
-      '[class*="diffstat"]',
-      '[class*="Diffstat"]',
-    ];
-    
+    // Look for the diffstat wrapper div, then find the addition/deletion spans
     let changes = null;
-    for (const selector of diffstatSelectors) {
-      const el = document.querySelector(selector);
-      if (el) {
-        const text = el.innerText?.trim() || el.textContent?.trim();
-        if (text && /\+.*[\s−-]/.test(text)) {
-          changes = text;
-          break;
+    
+    // Try to find the diffstat wrapper by class pattern (random class name, but structure is consistent)
+    const diffstatWrapper = document.querySelector('[class*="diffStatesWrapper"]') ||
+                           document.querySelector('.diffstat') ||
+                           document.querySelector('[class*="diffstat"]');
+    
+    if (diffstatWrapper) {
+      // Look for spans with success (addition) and danger (deletion) colors
+      const additionSpan = diffstatWrapper.querySelector('span.fgColor-success, span[class*="success"]');
+      const deletionSpan = diffstatWrapper.querySelector('span.fgColor-danger, span[class*="danger"]');
+      
+      if (additionSpan && deletionSpan) {
+        const additions = additionSpan.innerText?.trim() || additionSpan.textContent?.trim();
+        const deletions = deletionSpan.innerText?.trim() || deletionSpan.textContent?.trim();
+        
+        if (additions && deletions) {
+          // Format as "+123 −45"
+          changes = `${additions} ${deletions}`;
+        }
+      }
+      
+      // Fallback: try sr-only text which has the format "Lines changed: 599 additions & 5 deletions"
+      if (!changes) {
+        const srOnly = diffstatWrapper.querySelector('.sr-only, [class*="VisuallyHidden"]');
+        if (srOnly) {
+          const text = srOnly.innerText || srOnly.textContent;
+          const match = text.match(/(\d+)\s+additions?\s*&\s*(\d+)\s+deletions?/i);
+          if (match) {
+            changes = `+${match[1]} −${match[2]}`;
+          }
+        }
+      }
+    }
+    
+    // Fallback: search in header area for pattern like "+123 −45"
+    if (!changes) {
+      const header = document.querySelector('.gh-header') ||
+                     document.querySelector('[role="banner"]') ||
+                     document.querySelector('header');
+      
+      if (header) {
+        const text = header.innerText || header.textContent;
+        const match = text.match(/\+[\d,]+[\s−-]+[\d,]+/);
+        if (match) {
+          changes = match[0].replace(/\s+/g, ' ').trim();
         }
       }
     }
@@ -206,22 +290,36 @@ async function addButton() {
 
 // Fallback placement
 function tryFallbackPlacement() {
-  const copyIcon = document.querySelector('button[data-component="IconButton"] svg.octicon-copy');
-  const copyBtn = copyIcon?.closest('button');
-  
-  if (copyBtn?.parentElement) {
-    const button = createButton();
-    if (button) {
-      copyBtn.insertAdjacentElement('afterend', button);
-      return;
+  // Try to find copy button and place after it
+  const copyIcon = document.querySelector('svg.octicon-copy');
+  if (copyIcon) {
+    const copyBtn = copyIcon.closest('button[data-component="IconButton"]') ||
+                    copyIcon.closest('button');
+    
+    if (copyBtn?.parentElement) {
+      const button = createButton();
+      if (button) {
+        copyBtn.insertAdjacentElement('afterend', button);
+        return;
+      }
     }
   }
   
-  const container = document.querySelector('.gh-header-actions') ||
-                    document.querySelector('.gh-header');
-  const button = createButton();
-  if (button && container) {
-    container.appendChild(button);
+  // Try to find container and append button
+  const containers = [
+    document.querySelector('.d-flex.flex-items-center.overflow-hidden'),
+    document.querySelector('.gh-header-actions'),
+    document.querySelector('.gh-header'),
+    document.querySelector('[role="banner"]'),
+    document.querySelector('header'),
+  ].filter(el => el !== null);
+  
+  for (const container of containers) {
+    const button = createButton();
+    if (button && document.contains(container)) {
+      container.appendChild(button);
+      return;
+    }
   }
 }
 
@@ -255,7 +353,14 @@ function init() {
     return;
   }
 
+  // Try immediately, then retry after a short delay for dynamic content
   addButton();
+  setTimeout(() => {
+    const existingBtn = document.getElementById(BUTTON_ID);
+    if (!existingBtn) {
+      addButton();
+    }
+  }, 1000);
 
   if (document.body) {
     setupObserver();
