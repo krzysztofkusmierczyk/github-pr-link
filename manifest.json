@@ -8,10 +8,6 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "{E5F048FF-5B35-4314-A2B6-9314B8CDECDE}",
-      "data_collection_permissions": {
-        "required": [],
-        "optional": []
-      }
     }
   },
   "content_scripts": [
